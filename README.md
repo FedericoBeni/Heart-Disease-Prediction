@@ -10,6 +10,7 @@ Il progetto analizza l'impatto di diverse strategie di **discretizzazione dei da
 Il dataset utilizzato è l'**[UCI Heart Disease Data](https://www.kaggle.com/datasets/redwankarimsony/heart-disease-data)**, disponibile su Kaggle. Contiene 920 record e 14 attributi clinici.
 
 ##  Struttura del Progetto
+Il primo tentativo è stato eseguito senza discretizzare i dati (NoDisc), impostando così una baseline di Partenza.
 Il workflow è suddiviso in script di preprocessing, partizionamento e apprendimento:
 
 ### Preprocessing & Data Prep
@@ -18,6 +19,7 @@ Il workflow è suddiviso in script di preprocessing, partizionamento e apprendim
 * `split_heart_dataset.pl`: Script per il mescolamento casuale (shuffling) e la suddivisione del dataset in **Training Set (70%)** e **Test Set (30%)**.
 
 ### Strategie di Discretizzazione
+*  Primo approccio senza discretizzazione dei dati, impostando la baseline NoDisc.
 * `discretizza1.pl`, `discretizza2.pl`: Approcci basati su soglie mediche (bassa granularità).
 * `discretizza3.pl`: Approccio statistico basato su 10 decili.
 * `discretizza4.py`: Script Python per la discretizzazione ad alta densità (50 fasce).
@@ -28,7 +30,7 @@ Il workflow è suddiviso in script di preprocessing, partizionamento e apprendim
 * `heart_Entropia_TreeInduction.pl`: Costruzione dell'albero tramite Entropia.
 
 # Presentazione dei Risultati
-Tutta l'analisi comparativa, i dettagli tecnici sui fallimenti logici (Underfitting) e i successi statistici (Overfitting vs Generalizzazione) sono illustrati nella presentazione ufficiale.
+Tutta l'analisi comparativa, i dettagli tecnici ed il confronto dei risultati ottenuti con i vari approcci sono illustrati nella presentazione ufficiale.
 
 **[Visualizza la Presentazione del Progetto (PDF)](HEART%20DISEASE%20PREDICTION.pdf)**
 
