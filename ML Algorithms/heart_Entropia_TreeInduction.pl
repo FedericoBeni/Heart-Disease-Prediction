@@ -1,0 +1,192 @@
+% programma per apprendere inducendo Alberi di Decisione testandone
+% l' efficacia
+
+:- ensure_loaded(heart_attributiNoDisc).
+:- ensure_loaded(heart_training_setNoDisc).
+:- ensure_loaded(heart_test_setNoDisc).
+
+:- dynamic alb/1.
+
+induce_albero( Albero ) :-
+	findall( e(Classe,Oggetto), e(Classe,Oggetto), Esempi),
+        findall( Att,a(Att,_), Attributi),
+        induce_albero( Attributi, Esempi, Albero),
+	mostra( Albero ),
+	assert(alb(Albero)).
+
+% induce_albero( +Attributi, +Esempi, -Albero):
+% l'Albero indotto dipende da questi tre casi:
+% (1) Albero = null: l'insieme degli esempi è vuoto
+% (2) Albero = l(Classe): tutti gli esempi sono della stessa classe
+% (3) Albero = t(Attributo, [Val1:SubAlb1, Val2:SubAlb2, ...]):
+%     gli esempi appartengono a più di una classe
+%     Attributo è la radice dell'albero
+%     Val1, Val2, ... sono i possibili valori di Attributo
+%     SubAlb1, SubAlb2,... sono i corrispondenti sottoalberi di
+%     decisione.
+% (4) Albero = l(Classi): non abbiamo Attributi utili per
+%     discriminare ulteriormente
+induce_albero( _, [], null ) :- !.			         % (1)
+induce_albero( _, [e(Classe,_)|Esempi], l(Classe)) :-	         % (2)
+	\+ ( member(e(ClassX,_),Esempi), ClassX \== Classe ),!.  % no esempi di altre classi (OK!!)
+induce_albero( Attributi, Esempi, t(Attributo,SAlberi) ) :-	 % (3)
+	sceglie_attributo( Attributi, Esempi, Attributo), !,     % implementa la politica di scelta
+	del( Attributo, Attributi, Rimanenti ),			 % elimina Attributo scelto
+	a( Attributo, Valori ),					 % ne preleva i valori
+	induce_alberi( Attributo, Valori, Rimanenti, Esempi, SAlberi).
+induce_albero( _, Esempi, l(Classi)) :-                          % finiti gli attributi utili (KO!!)
+	findall( Classe, member(e(Classe,_),Esempi), Classi).
+
+% sceglie_attributo( +Attributi, +Esempi, -MigliorAttributo):
+% Seleziona l'attributo che massimizza il guadagno di informazione.
+% Usiamo setof per ordinare in base all'entropia residua.
+sceglie_attributo( Attributi, Esempi, MigliorAttributo )  :-
+	setof( Disuguaglianza/A,
+	      (member(A,Attributi) , disuguaglianza(Esempi,A,Disuguaglianza)),
+	      [_/MigliorAttributo|_] ).
+
+% disuguaglianza(+Esempi, +Attributo, -InfoGain)
+% InfoGain rappresenta il guadagno informativo calcolato per il dato Attributo.
+% Si calcola come la differenza tra l'entropia iniziale del dataset e l'entropia
+% pesata dei sottoinsiemi creati dividendo il dataset in base ai valori dell'Attributo.
+disuguaglianza(Esempi, Attributo, InfoGain) :-
+    entropia(Esempi, EntropiaIniziale),           % Calcola l'entropia iniziale del dataset.
+    a(Attributo, AttVals),                        % Ottiene i possibili valori dell'Attributo.
+    somma_pesata(Esempi, Attributo, AttVals, 0, EntropiaPesata), % Calcola l'entropia pesata.
+    InfoGain is EntropiaIniziale - EntropiaPesata. % Guadagno informativo = entropia iniziale - pesata.
+
+% somma_pesata(+Esempi, +Attributo, +AttVals, +SommaParziale, -Somma)
+% Calcola la somma pesata dell'entropia per i sottoinsiemi degli esempi partizionati
+% in base ai valori dell'Attributo.
+somma_pesata(_, _, [], Somma, Somma).             % Caso base: nessun valore, restituisce la somma accumulata.
+somma_pesata(Esempi, Att, [Val | Valori], SommaParziale, Somma) :-
+    length(Esempi, N),                            % Numero totale di esempi.
+    findall(e(C, O),                              % Filtra gli esempi che soddisfano la condizione Att=Val.
+            (member(e(C, O), Esempi), soddisfa(O, [Att = Val])),
+            EsempiSoddisfatti),
+    length(EsempiSoddisfatti, NVal),              % Conta gli esempi che soddisfano Att=Val.
+    NVal > 0, !,                                  % Procede solo se almeno un esempio soddisfa.
+    entropia(EsempiSoddisfatti, EntropiaSubset),  % Calcola l'entropia del sottoinsieme.
+    NuovaSommaParziale is SommaParziale + (NVal / N) * EntropiaSubset, % Aggiunge la parte pesata.
+    somma_pesata(Esempi, Att, Valori, NuovaSommaParziale, Somma)       % Continua con i valori rimanenti.
+    ;
+    somma_pesata(Esempi, Att, Valori, SommaParziale, Somma). % Caso in cui nessun esempio soddisfa Att=Val.
+
+% entropia(+Esempi, -Entropia)
+% Calcola l'entropia di un insieme di esempi.
+% Entropia = -SUM(Pi * log2(Pi)) per ogni classe i presente nel dataset.
+entropia(Esempi, Entropia) :-
+    length(Esempi, N),                            % Numero totale di esempi.
+    findall(P,                                    % Calcola le probabilità delle classi.
+            (bagof(1, member(e(Classe, _), Esempi), L), % Crea una lista L di 1 per ogni esempio di una classe
+             length(L, NC),						  % Conta gli elementi di L
+             P is NC / N),                        % Calcocola la probabilità della classe
+            Probabilità),                         % Raccoglie tutte le probabilità in una lista probabilità
+    entropia_da_probabilità(Probabilità, Entropia). % Calcola l'entropia data la lista delle probabilià.
+
+% entropia_da_probabilità(+ListaProbabilità, -Entropia)
+% Calcola l'entropia data una lista di probabilità.
+entropia_da_probabilità([], 0).                  % Caso base: nessuna probabilità, entropia nulla.
+entropia_da_probabilità([P | Ps], Entropia) :-
+    entropia_da_probabilità(Ps, EntropiaParziale), % Calcola ricorsivamente l'entropia per il resto.
+    (P =:= 0 -> Entropia is EntropiaParziale      % Ignora le probabilità nulle.
+    ; Entropia is EntropiaParziale - P * log(P) / log(2)). % Applica la formula -P * log2(P).
+
+
+% induce_alberi(Attributi, Valori, AttRimasti, Esempi, SAlberi):
+% induce decisioni SAlberi per sottoinsiemi di Esempi secondo i Valori
+% degli Attributi
+induce_alberi(_,[],_,_,[]).     % nessun valore, nessun sottoalbero
+induce_alberi(Att,[Val1|Valori],AttRimasti,Esempi,[Val1:Alb1|Alberi])  :-
+	attval_subset(Att=Val1,Esempi,SottoinsiemeEsempi),
+	induce_albero(AttRimasti,SottoinsiemeEsempi,Alb1),
+	induce_alberi(Att,Valori,AttRimasti,Esempi,Alberi).
+
+% attval_subset( Attributo = Valore, Esempi, Subset):
+%   Subset è il sottoinsieme di Examples che soddisfa la condizione
+%   Attributo = Valore
+attval_subset(AttributoValore,Esempi,Sottoinsieme) :-
+	findall(e(C,O),(member(e(C,O),Esempi),soddisfa(O,[AttributoValore])),Sottoinsieme).
+
+% soddisfa(Oggetto, Descrizione):
+soddisfa(Oggetto,Congiunzione)  :-
+	\+ (member(Att=Val,Congiunzione),
+	    member(Att=ValX,Oggetto),
+	    ValX \== Val).
+
+del(T,[T|C],C) :- !.
+del(A,[T|C],[T|C1]) :-
+	del(A,C,C1).
+
+mostra(T) :-
+	mostra(T,0).
+mostra(null,_) :- writeln(' ==> ???').
+mostra(l(X),_) :- write(' ==> '),writeln(X).
+mostra(t(A,L),I) :-
+	nl,tab(I),write(A),nl,I1 is I+2,
+	mostratutto(L,I1).
+mostratutto([],_).
+mostratutto([V:T|C],I) :-
+	tab(I),write(V), I1 is I+2,
+	mostra(T,I1),
+	mostratutto(C,I).
+
+
+% ================================================================================
+% classifica( +Oggetto, -Classe, t(+Att,+Valori))
+%  Oggetto: [Attributo1=Valore1, .. , AttributoN=ValoreN]
+%  Classe: classe a cui potrebbe appartenere un oggetto caratterizzato da quelle coppie
+%  Attributo=Valore
+%  t(-Att,-Valori): Albero di Decisione
+% presuppone sia stata effettuata l'induzione dell'Albero di Decisione
+
+classifica(Oggetto,nc,t(Att,Valori)) :- % dato t(+Att,+Valori), Oggetto è della Classe
+	member(Att=Val,Oggetto),  % se Att=Val è elemento della lista Oggetto
+        member(Val:null,Valori). % e Val:null è in Valori
+
+classifica(Oggetto,Classe,t(Att,Valori)) :- % dato t(+Att,+Valori), Oggetto è della Classe
+	member(Att=Val,Oggetto),  % se Att=Val è elemento della lista Oggetto
+        member(Val:l(Classe),Valori). % e Val:l(Classe) è in Valori
+
+classifica(Oggetto,Classe,t(Att,Valori)) :-
+	member(Att=Val,Oggetto),  % se Att=Val è elemento della lista Oggetto
+	delete(Oggetto,Att=Val,Resto),
+	member(Val:t(AttFiglio,ValoriFiglio),Valori),
+	classifica(Resto,Classe,t(AttFiglio,ValoriFiglio)).
+
+
+stampa_matrice_di_confusione :-
+	alb(Albero),
+	findall(Classe/Oggetto,s(Classe,Oggetto),TestSet),
+	length(TestSet,N),
+	valuta(Albero,TestSet,VN,0,VP,0,FN,0,FP,0,NC,0),
+	A is (VP + VN) / (N - NC), % Accuratezza
+	E is 1 - A,		   % Errore
+	write('Test effettuati :'),  writeln(N),
+	write('Test non classificati :'),  writeln(NC),
+	write('Veri Negativi  '), write(VN), write('   Falsi Positivi '), writeln(FP),
+	write('Falsi Negativi '), write(FN), write('   Veri Positivi  '), writeln(VP),
+	write('Accuratezza: '), writeln(A),
+	write('Errore: '), writeln(E).
+
+valuta(_,[],VN,VN,VP,VP,FN,FN,FP,FP,NC,NC).            % testset vuoto -> valutazioni finali
+valuta(Albero,[no/Oggetto|Coda],VN,VNA,VP,VPA,FN,FNA,FP,FPA,NC,NCA) :-
+	classifica(Oggetto,no,Albero), !,      % prevede correttamente l'assenza di malattia
+	VNA1 is VNA + 1,
+	valuta(Albero,Coda,VN,VNA1,VP,VPA,FN,FNA,FP,FPA,NC,NCA).
+valuta(Albero,[yes/Oggetto|Coda],VN,VNA,VP,VPA,FN,FNA,FP,FPA,NC,NCA) :-
+	classifica(Oggetto,yes,Albero), !, % prevede correttamente la presenza di malattia
+	VPA1 is VPA + 1,
+	valuta(Albero,Coda,VN,VNA,VP,VPA1,FN,FNA,FP,FPA,NC,NCA).
+valuta(Albero,[yes/Oggetto|Coda],VN,VNA,VP,VPA,FN,FNA,FP,FPA,NC,NCA) :-
+	classifica(Oggetto,no,Albero), !,      % prevede erroneamente l'assenza di malattia
+	FNA1 is FNA + 1,
+	valuta(Albero,Coda,VN,VNA,VP,VPA,FN,FNA1,FP,FPA,NC,NCA).
+valuta(Albero,[no/Oggetto|Coda],VN,VNA,VP,VPA,FN,FNA,FP,FPA,NC,NCA) :-
+	classifica(Oggetto,yes,Albero), !, % prevede erroneamente la presenza di malattia
+	FPA1 is FPA + 1,
+	valuta(Albero,Coda,VN,VNA,VP,VPA,FN,FNA,FP,FPA1,NC,NCA).
+valuta(Albero,[_/Oggetto|Coda],VN,VNA,VP,VPA,FN,FNA,FP,FPA,NC,NCA) :- % non classifica
+	classifica(Oggetto,nc,Albero), !, % non classificato
+	NCA1 is NCA + 1,
+	valuta(Albero,Coda,VN,VNA,VP,VPA,FN,FNA,FP,FPA,NC,NCA1).
