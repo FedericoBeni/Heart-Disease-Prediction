@@ -118,10 +118,14 @@ scrivi_esempi :-
 scrivi_esempi :- told.
 
 
-/*scrivi_esempi :-
+/*VARIANTE PER IL CASO NoDisc
+Aggiunta della discretizzazione del target, poichè essa negli altri casi avveniva negli script Discretizza1/2/3/4
+
+
+scrivi_esempi :-
     % CASO MALATO (Target > 0)
     paziente(Age,Sex,Cp,Bp,Chol,Fbs,Ecg,Hr,Ex,Dep,Slp,Ca,Thal, Tar),
-    Tar > 0, % Se il target � 1, 2, 3 o 4, lo consideriamo 'yes'
+    Tar > 0, % Se il target è 1, 2, 3 o 4, lo consideriamo 'yes'
     scrivi_record(yes, Age,Sex,Cp,Bp,Chol,Fbs,Ecg,Hr,Ex,Dep,Slp,Ca,Thal),
     fail.
 
@@ -150,5 +154,6 @@ scrivi_record(Classe, Age,Sex,Cp,Bp,Chol,Fbs,Ecg,Hr,Ex,Dep,Slp,Ca,Thal) :-
     write('ca='), writeq(Ca), write(', '),
     write('thal='), writeq(Thal), writeln(']).').
 */
+
 
 
